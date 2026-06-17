@@ -5,63 +5,63 @@ from feature_extraction import get_face_embedding
 
 
 def test_my_module():
-    print("正在启动摄像头，请看向镜头...")
-    # 0 代表默认摄像头。如果你有外接摄像头或者虚拟摄像头，可能需要改成 1 或 2
+    print("Starting camera, please look at the lens...")
+    # 0 represents the default camera. If you have an external or virtual camera, you might need to change it to 1 or 2.
     cap = cv2.VideoCapture(0)
 
     if not cap.isOpened():
-        print("错误：无法打开摄像头！请检查是否被其他程序（如微信、Zoom）占用。")
+        print("Error: Could not open camera! Please check if it is being used by another program (e.g., WeChat, Zoom).")
         return
 
-    # 给摄像头 1 秒钟的预热时间，跳过开头的黑屏帧
+    # Give the camera 1 second to warm up, skipping the initial black frames.
     time.sleep(1)
 
-    print("摄像头已就绪。")
-    print("👉 按下键盘的 's' 键打印当前特征向量")
-    print("👉 按下键盘的 'q' 键退出测试")
+    print("Camera is ready.")
+    print("👉 Press 's' on the keyboard to print the current feature vector.")
+    print("👉 Press 'q' on the keyboard to exit the test.")
 
     while True:
         ret, frame = cap.read()
 
         if not ret:
-            print("读取画面失败。")
+            print("Failed to read frame.")
             break
 
         try:
-            # 调用你的核心提取函数
+            # Invoke your core extraction function
             embedding = get_face_embedding(frame)
 
-            # 判断是否提取成功（不全为 0）
+            # Check if extraction was successful (not all zeros)
             if embedding.shape[0] > 0 and not np.all(embedding == 0):
                 status_text = "Success! Face Detected"
-                color = (0, 255, 0)  # 绿色
+                color = (0, 255, 0)  # Green
             else:
                 status_text = "No Face Detected"
-                color = (0, 0, 255)  # 红色
+                color = (0, 0, 255)  # Red
 
-            # 在视频画面上打上状态文字
+            # Overlay status text on the video frame
             cv2.putText(frame, status_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
 
         except Exception as e:
             cv2.putText(frame, f"Error: {e}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-        # 弹出一个窗口显示实时画面
+        # Pop up a window to display the real-time video frame
         cv2.imshow("Role 2 - Model Test", frame)
 
-        # 捕捉键盘操作
+        # Capture keyboard operations
         key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):  # 按 q 退出
-            print("测试结束。")
+        if key == ord('q'):  # Press q to exit
+            print("Test finished.")
             break
-        elif key == ord('s'):  # 按 s 打印数据
-            print("\n--- 手动触发提取 ---")
+        elif key == ord('s'):  # Press s to print data
+            print("\n--- Manual Extraction Triggered ---")
             if not np.all(embedding == 0):
-                print(f"✅ 成功！特征向量维度: {embedding.shape}")
-                print(f"向量前5位展示: {embedding[:5]}")
+                print(f"✅ Success! Feature vector dimensions: {embedding.shape}")
+                print(f"First 5 elements display: {embedding[:5]}")
             else:
-                print("⚠️ 当前画面中未检测到人脸，输出为全 0。")
+                print("⚠️ No face detected in the current frame, output is all zeros.")
 
-    # 释放资源并关闭窗口
+    # Release resources and close windows
     cap.release()
     cv2.destroyAllWindows()
 
