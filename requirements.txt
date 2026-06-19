@@ -8,3 +8,12 @@ onnxruntime==1.17.1
 torch==2.2.1
 torchvision==0.17.1
 pandas==2.2.1
+# 当系统是 Mac (Darwin) 时，安装 0.10.8 版本
+mediapipe==0.10.8; sys_platform == 'darwin'
+
+# 当系统是 Windows 时，安装标准最新版（或你们团队统一的版本，如 0.10.14）
+mediapipe==0.10.14; sys_platform == 'win32'
+
+# 其他通用依赖保持不变
+streamlit>=1.30.0
+watchdog; sys_platform == 'darwin'
