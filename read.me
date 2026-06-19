@@ -1,0 +1,101 @@
+一、环境统一要求（整合时必须匹配，避免版本冲突）
+Python 3.9 / 3.10
+所有依赖版本已锁定在 requirements.txt，整合时直接一键安装即可
+txt
+streamlit==1.32.0
+streamlit-webrtc==0.47.0
+opencv-python==4.9.0.80
+numpy==1.26.4
+Pillow==10.2.0
+mediapipe==0.10.11
+onnxruntime==1.17.1
+torch==2.2.1
+torchvision==0.17.1
+pandas==2.2.1
+二、项目文件结构（你仅需整合替换 3 处算法文件）
+plaintext
+FaceAttendanceSystem/
+├── app.py                # 盘先琰 前端主程序（全部页面、摄像头、可视化逻辑）
+├── requirements.txt      # 统一依赖
+├── prototype_screenshot  # 前端测试截图（报告素材，可直接使用）
+├── venv/                 # 虚拟环境（整合时可重建）
+# ========== 整合替换区域（你的模块放这里）==========
+├── liveness_module.py    # 活体检测模块（陈立杰、汤艾梧提供）
+├── face_embedding.py     # 人脸特征提取模块（黄晨禹提供）
+├── sqlite_db.py          # 数据库注册/识别模块（陈锡翘提供）
+三、一键部署运行流程（整合组员复制 CMD 命令即可启动）
+打开 CMD，进入项目根目录
+cmd
+D:
+cd D:\FaceAttendanceSystem
+创建并激活虚拟环境
+cmd
+python -m venv venv
+venv\Scripts\activate
+安装全部依赖
+cmd
+pip install -r requirements.txt
+启动前端页面
+cmd
+streamlit run app.py
+四、接口对接规范【整合核心重点】
+app.py 顶部预留了标准导入入口，只需替换模拟函数为真实模块即可，页面逻辑完全不用修改
+1. 当前代码里的模拟占位函数（整合时删除，替换为导入）
+python
+运行
+# ========== 整合操作：删除下方模拟函数，取消下面3行注释 ==========
+# from liveness_module import verify_liveness
+# from face_embedding import get_face_embedding
+# from sqlite_db import register_user, recognize_user
+
+# 以下是临时模拟函数，联调时全部移除
+def verify_liveness(frame: np.ndarray) -> bool:
+    return True
+def get_face_embedding(frame: np.ndarray) -> np.ndarray:
+    return np.random.rand(512)
+def register_user(student_id: str, embedding: np.ndarray) -> bool:
+    return True
+def recognize_user(current_embedding: np.ndarray, threshold: float = 0.6) -> str:
+    return "AIT2509020"
+2. 各接口入参、返回值固定约定（不可修改，保证兼容）
+verify_liveness(frame)
+入参：np.ndarray 摄像头 BGR 图像帧
+返回：bool True = 真人活体通过 / False = 照片 / 屏幕伪造
+get_face_embedding(frame)
+入参：np.ndarray 人脸图像帧
+返回：np.ndarray 512 维人脸特征向量
+register_user(student_id, embedding)
+入参 1：字符串 student_id 学生学号；入参 2：512 维特征向量
+返回：bool True = 注册入库成功
+recognize_user(embedding, threshold=0.6)
+入参 1：512 维特征向量；入参 2：匹配阈值默认 0.6
+返回：字符串 匹配到的学号；无匹配返回空字符串
+五、两大页面完整业务流程（整合时逻辑无需改动）
+页面 1 User Register 用户注册
+用户输入学号
+开启摄像头，实时绘制人脸关键点、计算并展示 EAR 值
+每一帧调用 verify_liveness() 判断活体
+活体校验通过后，点击【Submit Register】
+调用 get_face_embedding() 提取人脸特征
+调用 register_user() 将学号 + 特征存入数据库
+前端提示原图仅在内存流转、已销毁，不落地保存图片
+页面 2 Real-Time Attendance 实时打卡
+开启摄像头实时流，画面叠加人脸框、眼部关键点、EAR 数值
+调用 verify_liveness() 拦截照片攻击
+活体通过后自动提取人脸特征
+调用 recognize_user() 和数据库比对
+匹配成功：绿色提示打卡成功，展示学号；匹配失败红色拦截
+六、前端可控全局变量（如需调整交互仅修改此处）
+全部状态存储在 st.session_state，整合时可直接读取：
+st.session_state["live_status"]：活体检测布尔结果
+st.session_state["ear"]：实时 EAR 眨眼阈值浮点值
+st.session_state["stu_id"]：用户输入的学号字符串
+七、整合常见问题 & 修复
+运行提示ModuleNotFoundError
+解决：必须激活 (venv) 虚拟环境后再执行启动命令
+摄像头无画面
+解决：点击页面 START，浏览器允许摄像头权限，更换 SELECT DEVICE 切换设备
+对接后识别无返回结果
+排查：确认recognize_user返回值为字符串学号，阈值默认 0.6 可在代码内微调
+活体检测永远返回 False
+排查：确认verify_liveness接收 BGR 格式 np 图像帧，无通道顺序错误
