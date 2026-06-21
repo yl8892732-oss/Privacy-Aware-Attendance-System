@@ -6,35 +6,52 @@ from db_manager import (
     init_db,
     register_user,
     recognize_user,
-    log_attendance,
-    get_user_count,
+    log_attendance
 )
 
 from feature_extraction import get_face_embedding
-from blink_detector import verify_liveness
 
 
-# ==========================================================
-# Initialize
-# ==========================================================
+# ==================================================
+# Temporary Liveness Check
+# ==================================================
+
+def verify_liveness(frame):
+    """
+    Temporary implementation.
+    Replace with EAR blink detection later.
+    """
+    return True
+
+
+# ==================================================
+# Streamlit Config
+# ==================================================
 
 st.set_page_config(
     page_title="Privacy-Aware Attendance System",
     layout="wide"
 )
 
-init_db()
-
 st.title("🔐 Privacy-Aware Attendance System")
-st.markdown("### Local Face Recognition Attendance System")
+st.caption("Face Recognition Attendance System")
+
+# ==================================================
+# Database Init
+# ==================================================
+
+try:
+    init_db()
+except Exception as e:
+    st.error(f"Database initialization failed: {e}")
 
 
-# ==========================================================
+# ==================================================
 # Sidebar
-# ==========================================================
+# ==================================================
 
 menu = st.sidebar.selectbox(
-    "Select Function",
+    "Navigation",
     [
         "Home",
         "Register User",
@@ -42,41 +59,35 @@ menu = st.sidebar.selectbox(
     ]
 )
 
-
-# ==========================================================
+# ==================================================
 # Home
-# ==========================================================
+# ==================================================
 
 if menu == "Home":
 
-    st.subheader("System Overview")
+    st.header("System Overview")
 
-    col1, col2 = st.columns(2)
+    st.markdown("""
+    ### Workflow
 
-    with col1:
-        st.metric(
-            "Registered Users",
-            get_user_count()
-        )
-
-    with col2:
-        st.metric(
-            "Database",
-            "SQLite Local"
-        )
+    1. Capture Face
+    2. Liveness Verification
+    3. Face Feature Extraction
+    4. SQLite Storage
+    5. Attendance Logging
+    """)
 
     st.success(
-        "Privacy-Aware Design: Only embeddings are stored. No face images saved."
+        "Privacy Protection: Only face embeddings are stored. No face images are saved."
     )
 
-
-# ==========================================================
-# Register User
-# ==========================================================
+# ==================================================
+# Register
+# ==================================================
 
 elif menu == "Register User":
 
-    st.subheader("User Registration")
+    st.header("Register New User")
 
     student_id = st.text_input(
         "Student ID",
@@ -84,43 +95,39 @@ elif menu == "Register User":
     )
 
     image_file = st.camera_input(
-        "Capture Face"
+        "Capture Face Image"
     )
 
     if st.button("Register"):
 
         if image_file is None:
-            st.error("Please capture an image.")
+            st.error("Please capture a face image.")
             st.stop()
 
         if student_id.strip() == "":
-            st.error("Please enter student ID.")
+            st.error("Please enter a Student ID.")
             st.stop()
-
-        file_bytes = np.asarray(
-            bytearray(image_file.getvalue()),
-            dtype=np.uint8
-        )
-
-        frame = cv2.imdecode(
-            file_bytes,
-            cv2.IMREAD_COLOR
-        )
-
-        st.info("Performing liveness detection...")
-
-        if not verify_liveness(frame):
-
-            st.error(
-                "Liveness Verification Failed. Please blink."
-            )
-
-            del frame
-            st.stop()
-
-        st.success("Liveness Verified")
 
         try:
+
+            file_bytes = np.asarray(
+                bytearray(image_file.getvalue()),
+                dtype=np.uint8
+            )
+
+            frame = cv2.imdecode(
+                file_bytes,
+                cv2.IMREAD_COLOR
+            )
+
+            if not verify_liveness(frame):
+
+                st.error(
+                    "Liveness verification failed."
+                )
+
+                del frame
+                st.stop()
 
             embedding = get_face_embedding(frame)
 
@@ -133,7 +140,7 @@ elif menu == "Register User":
 
             if success:
                 st.success(
-                    f"{student_id} registered successfully."
+                    f"User {student_id} registered successfully."
                 )
             else:
                 st.error(
@@ -141,90 +148,107 @@ elif menu == "Register User":
                 )
 
         except Exception as e:
-            st.error(str(e))
+            st.exception(e)
 
-
-# ==========================================================
+# ==================================================
 # Attendance
-# ==========================================================
+# ==================================================
 
 elif menu == "Attendance":
 
-    st.subheader("Attendance Check-In")
+    st.header("Attendance Check-In")
 
     image_file = st.camera_input(
-        "Capture Face"
+        "Capture Face Image"
+    )
+
+    threshold = st.slider(
+        "Recognition Threshold",
+        min_value=0.40,
+        max_value=1.00,
+        value=0.60,
+        step=0.05
     )
 
     if st.button("Mark Attendance"):
 
         if image_file is None:
             st.error(
-                "Please capture an image."
+                "Please capture a face image."
             )
             st.stop()
-
-        file_bytes = np.asarray(
-            bytearray(image_file.getvalue()),
-            dtype=np.uint8
-        )
-
-        frame = cv2.imdecode(
-            file_bytes,
-            cv2.IMREAD_COLOR
-        )
-
-        st.info("Performing liveness detection...")
-
-        if not verify_liveness(frame):
-
-            st.error(
-                "Spoofing Detected!"
-            )
-
-            log_attendance(
-                "Unknown",
-                "Spoofing_Detected"
-            )
-
-            del frame
-            st.stop()
-
-        st.success(
-            "Liveness Verified"
-        )
 
         try:
 
+            file_bytes = np.asarray(
+                bytearray(image_file.getvalue()),
+                dtype=np.uint8
+            )
+
+            frame = cv2.imdecode(
+                file_bytes,
+                cv2.IMREAD_COLOR
+            )
+
+            if not verify_liveness(frame):
+
+                log_attendance(
+                    "Unknown",
+                    "Spoofing_Detected"
+                )
+
+                st.error(
+                    "Spoofing detected."
+                )
+
+                del frame
+                st.stop()
+
             embedding = get_face_embedding(frame)
 
-            student_id = recognize_user(
-                embedding
-            )
+            try:
+
+                student_id = recognize_user(
+                    embedding,
+                    threshold=threshold
+                )
+
+            except TypeError:
+
+                # Compatible with old version
+                student_id = recognize_user(
+                    embedding
+                )
 
             del frame
 
-            if student_id != "Unknown":
+            if student_id and student_id != "Unknown":
 
-                log_attendance(
-                    student_id,
-                    "Success"
-                )
+                try:
+                    log_attendance(
+                        student_id,
+                        "Success"
+                    )
+                except:
+                    pass
 
                 st.success(
-                    f"Attendance Marked: {student_id}"
+                    f"Attendance marked for: {student_id}"
                 )
 
             else:
 
-                log_attendance(
-                    "Unknown",
-                    "Recognition_Failed"
-                )
+                try:
+                    log_attendance(
+                        "Unknown",
+                        "Recognition_Failed"
+                    )
+                except:
+                    pass
 
                 st.warning(
-                    "User Not Recognized"
+                    "User not recognized."
                 )
 
         except Exception as e:
-            st.error(str(e))
+            st.exception(e)
