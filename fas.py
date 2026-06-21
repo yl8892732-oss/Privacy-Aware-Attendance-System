@@ -305,19 +305,11 @@ def _get_detector():
     return _dual_detector
 
 
-def init_fas_detector(buffer_size: int = 10):
-    global _dual_detector
-    if _dual_detector is None:
-        _dual_detector = DualLivenessDetector(buffer_size=buffer_size)
-    return _dual_detector
-
-
-def verify_liveness(frame: np.ndarray) -> dict:
+def verify_liveness(frame: np.ndarray) -> bool:
     if frame is None or frame.size == 0:
-        return {"is_live": False, "confidence": 0.0}
+        return False
 
     detector = _get_detector()
-
 
     h, w = frame.shape[:2]
     if h > 64 and w > 64:
@@ -327,18 +319,7 @@ def verify_liveness(frame: np.ndarray) -> dict:
 
     result = detector.detect(face_crop)
 
-
     if result.get('status') == 'waiting_for_frames':
-        return {
-            "is_live": bool(result.get('is_live', False)),
-            "confidence": float(result.get('confidence', 0.0))
-        }
+        return bool(result.get('is_live', False))
 
-    return {
-        "is_live": bool(result.get('is_live', False)),
-        "confidence": float(result.get('confidence', 0.0))
-    }
-
-
-def verify_fas_liveness(frame: np.ndarray) -> dict:
-    return verify_liveness(frame)
+    return bool(result.get('is_live', False))
