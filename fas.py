@@ -294,3 +294,43 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+_dual_detector = None
+
+
+def _get_detector():
+    global _dual_detector
+    if _dual_detector is None:
+        _dual_detector = DualLivenessDetector(buffer_size=10)
+    return _dual_detector
+
+
+def init_fas_detector(buffer_size: int = 10):
+    global _dual_detector
+    if _dual_detector is None:
+        _dual_detector = DualLivenessDetector(buffer_size=buffer_size)
+    return _dual_detector
+
+
+def verify_liveness(frame: np.ndarray) -> bool:
+    if frame is None or frame.size == 0:
+        return False
+
+    detector = _get_detector()
+
+    h, w = frame.shape[:2]
+    if h > 64 and w > 64:
+        face_crop = frame[h // 4:3 * h // 4, w // 4:3 * w // 4]
+    else:
+        face_crop = frame
+
+    result = detector.detect(face_crop)
+
+    if result.get('status') == 'waiting_for_frames':
+        return bool(result.get('is_live', False))
+
+    return bool(result.get('is_live', False))
+
+
+def verify_fas_liveness(frame: np.ndarray) -> bool:
+    return verify_liveness(frame)
