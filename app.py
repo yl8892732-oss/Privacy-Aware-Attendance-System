@@ -49,14 +49,15 @@ def draw_face_landmark(img):
 # =========================================================================
 class VideoProcessor:
     def __init__(self):
-        # Using class attributes instead of st.session_state to avoid ScriptRunContext errors
         self.ear = 0.3
         self.live_status = False
+        self.latest_frame = None
 
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
         """Handles real-time video frame transformation and pipeline execution."""
         img = frame.to_ndarray(format="bgr24")
-
+        self.latest_frame = img.copy()
+        img, ear_val = draw_face_landmark(img)
         # Process face mesh landmarks
         img, ear_val = draw_face_landmark(img)
         self.ear = ear_val
@@ -94,14 +95,24 @@ def register_page():
 
     if st.button("Submit Register"):
         sid = st.session_state.get("stu_id", "")
-        if sid:
-            frame_dummy = np.zeros((480, 640, 3), dtype=np.uint8)
-            emb = get_face_embedding(frame_dummy)
-            success = register_user(sid, emb)
-            if success:
-                st.success(f"Register Success! ID: {sid}, Original Image Deleted From Memory.")
-        else:
+
+        if not sid:
             st.warning("Please enter a valid Student ID before submitting.")
+            return
+
+        if not (ctx.video_processor and ctx.video_processor.latest_frame is not None):
+            st.error("No camera frame available.")
+            return
+
+        emb = get_face_embedding(ctx.video_processor.latest_frame)
+
+        import numpy as np
+        st.write("DEBUG norm:", np.linalg.norm(emb))
+
+        success = register_user(sid, emb)
+
+        if success:
+            st.success(f"Register Success! ID: {sid}, Original Image Deleted From Memory.")
 
 
 def attendance_page():
@@ -120,9 +131,20 @@ def attendance_page():
 
     if live_stat:
         st.markdown("<h3 style='color:green'>Liveness Confirmed -> Start Recognition</h3>", unsafe_allow_html=True)
-        frame_dummy = np.zeros((480, 640, 3), dtype=np.uint8)
-        emb = get_face_embedding(frame_dummy)
-        match_id = recognize_user(emb, 0.6)
+        if ctx.video_processor and ctx.video_processor.latest_frame is not None:
+
+            emb = get_face_embedding(
+                ctx.video_processor.latest_frame
+            )
+
+            match_id = recognize_user(emb, 0.6)
+
+            st.success(
+                f"Attendance Marked, Student ID: {match_id}"
+            )
+
+        else:
+            st.warning("No camera frame available.")
         st.success(f"Attendance Marked, Student ID: {match_id}")
     else:
         st.markdown("<h3 style='color:red'>Spoofing Detected (Photo/Screen), Reject Attendance</h3>",
