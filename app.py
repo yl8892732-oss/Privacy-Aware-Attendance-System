@@ -6,19 +6,13 @@ import mediapipe as mp
 import av  # Required for the modern version of streamlit-webrtc
 
 
-# =========================================================================
-# CORE ALGORITHM INTEGRATION (Import teammates' independent algorithm modules)
-# Prerequisite: Put liveness_module.py / face_embedding.py / sqlite_db.py in the same root folder as app.py
-# =========================================================================
-# Dual liveness detection (blink EAR + MiniFASNet texture anti-spoof)
-from liveness_module import verify_liveness
-# Lightweight face feature extraction (EdgeFace / MobileFaceNet)
-from face_embedding import get_face_embedding
-# SQLite database registration interface
-from sqlite_db import register_user
-# SQLite face matching & recognition interface
-from sqlite_db import recognize_user
+from intro import verify_liveness
+from feature_extraction import get_face_embedding
+from db_manager import init_db
+from db_manager import register_user
+from db_manager import recognize_user
 
+init_db()
 
 # =========================================================================
 # MediaPipe Face Mesh Initialization
