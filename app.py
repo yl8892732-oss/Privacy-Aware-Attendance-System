@@ -1,6 +1,7 @@
 import streamlit as st
 import cv2
 import numpy as np
+import threading
 
 from db_manager import (
     init_db,
@@ -9,21 +10,78 @@ from db_manager import (
     log_attendance
 )
 
-from feature_extraction import get_face_embedding
+from feature_extraction import (
+    get_face_embedding
+)
 
+from blink_liveness import (
+    verify_liveness as ear_verify
+)
 
+from fas import (
+    verify_liveness as fas_verify
+)
+
+from streamlit_webrtc import (
+    webrtc_streamer,
+    VideoProcessorBase,
+    RTCConfiguration
+)
 # ==================================================
-# Temporary Liveness Check
+# Global State
 # ==================================================
 
-def verify_liveness(frame):
-    """
-    Temporary implementation.
-    Replace with EAR blink detection later.
-    """
-    return True
+latest_frame = None
+frame_lock = threading.Lock()
 
+ear_status = False
+fas_status = False
 
+rtc_config = RTCConfiguration(
+    {
+        "iceServers": [
+            {"urls": ["stun:stun.l.google.com:19302"]}
+        ]
+    }
+)
+# ==================================================
+# Dual Liveness
+# ==================================================
+
+def verify_dual_liveness(frame):
+
+    global ear_status
+    global fas_status
+
+    try:
+        ear_status = ear_verify(frame)
+    except Exception:
+        ear_status = False
+
+    try:
+        fas_status = fas_verify(frame)
+    except Exception:
+        fas_status = False
+
+    return ear_status and fas_status
+# ==================================================
+# Video Processor
+# ==================================================
+
+class CameraProcessor(VideoProcessorBase):
+
+    def recv(self, frame):
+
+        global latest_frame
+
+        img = frame.to_ndarray(
+            format="bgr24"
+        )
+
+        with frame_lock:
+            latest_frame = img.copy()
+
+        return frame
 # ==================================================
 # Streamlit Config
 # ==================================================
@@ -33,19 +91,20 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🔐 Privacy-Aware Attendance System")
-st.caption("Face Recognition Attendance System")
+st.title(
+    "🔐 Privacy-Aware Attendance System"
+)
 
-# ==================================================
-# Database Init
-# ==================================================
+st.caption(
+    "Face Recognition Attendance System"
+)
 
 try:
     init_db()
 except Exception as e:
-    st.error(f"Database initialization failed: {e}")
-
-
+    st.error(
+        f"Database initialization failed: {e}"
+    )
 # ==================================================
 # Sidebar
 # ==================================================
@@ -58,108 +117,149 @@ menu = st.sidebar.selectbox(
         "Attendance"
     ]
 )
-
 # ==================================================
 # Home
 # ==================================================
 
 if menu == "Home":
 
-    st.header("System Overview")
-
-    st.markdown("""
-    ### Workflow
-
-    1. Capture Face
-    2. Liveness Verification
-    3. Face Feature Extraction
-    4. SQLite Storage
-    5. Attendance Logging
-    """)
-
-    st.success(
-        "Privacy Protection: Only face embeddings are stored. No face images are saved."
+    st.header(
+        "System Overview"
     )
 
+    st.markdown(
+        """
+### Workflow
+
+1. Video Stream Capture
+2. EAR Blink Detection
+3. Texture FAS Detection
+4. Face Feature Extraction
+5. SQLite Storage
+6. Attendance Logging
+
+### Security Layers
+
+- EAR Blink Liveness
+- Texture FAS
+- Dynamic Texture Analysis
+- Face Recognition
+- Attendance Logging
+        """
+    )
+
+    st.success(
+        "Only embeddings are stored. No face images are saved."
+    )
 # ==================================================
-# Register
+# Register User
 # ==================================================
 
 elif menu == "Register User":
 
-    st.header("Register New User")
+    st.header(
+        "Register New User"
+    )
 
     student_id = st.text_input(
-        "Student ID",
-        placeholder="AIT2509001"
+        "Student ID"
     )
 
-    image_file = st.camera_input(
-        "Capture Face Image"
+    webrtc_streamer(
+        key="register",
+        video_processor_factory=CameraProcessor,
+        rtc_configuration=rtc_config,
+        media_stream_constraints={
+            "video": True,
+            "audio": False
+        }
     )
+    col1, col2 = st.columns(2)
 
-    if st.button("Register"):
+    with col1:
 
-        if image_file is None:
-            st.error("Please capture a face image.")
-            st.stop()
+        if ear_status:
+            st.success(
+                "EAR Blink: PASS"
+            )
+        else:
+            st.warning(
+                "EAR Blink: Waiting"
+            )
+
+    with col2:
+
+        if fas_status:
+            st.success(
+                "Texture FAS: PASS"
+            )
+        else:
+            st.warning(
+                "Texture FAS: Waiting"
+            )
+            if st.button(
+        "Register"
+    ):
 
         if student_id.strip() == "":
-            st.error("Please enter a Student ID.")
+            st.error(
+                "Please enter Student ID."
+            )
             st.stop()
 
-        try:
+        with frame_lock:
 
-            file_bytes = np.asarray(
-                bytearray(image_file.getvalue()),
-                dtype=np.uint8
-            )
-
-            frame = cv2.imdecode(
-                file_bytes,
-                cv2.IMREAD_COLOR
-            )
-
-            if not verify_liveness(frame):
-
+            if latest_frame is None:
                 st.error(
-                    "Liveness verification failed."
+                    "No frame received."
                 )
-
-                del frame
                 st.stop()
 
-            embedding = get_face_embedding(frame)
+            frame = latest_frame.copy()
+                try:
+
+            if not verify_dual_liveness(
+                frame
+            ):
+
+                st.error(
+                    "Dual liveness verification failed."
+                )
+
+                st.stop()
+
+            embedding = get_face_embedding(
+                frame
+            )
 
             success = register_user(
                 student_id,
                 embedding
             )
 
-            del frame
-
             if success:
+
                 st.success(
-                    f"User {student_id} registered successfully."
+                    f"{student_id} registered successfully."
                 )
+
             else:
+
                 st.error(
                     "Registration failed."
                 )
 
         except Exception as e:
-            st.exception(e)
 
+            st.exception(e)
 # ==================================================
 # Attendance
 # ==================================================
 
 elif menu == "Attendance":
 
-    st.header("Attendance Check-In")
-
-    image_file = st.camera_input(
-        "Capture Face Image"
+    st.header(
+        "Attendance Check-In"
     )
 
     threshold = st.slider(
@@ -170,42 +270,77 @@ elif menu == "Attendance":
         step=0.05
     )
 
-    if st.button("Mark Attendance"):
+    webrtc_streamer(
+        key="attendance",
+        video_processor_factory=CameraProcessor,
+        rtc_configuration=rtc_config,
+        media_stream_constraints={
+            "video": True,
+            "audio": False
+        }
+    )
+    col1, col2 = st.columns(2)
 
-        if image_file is None:
-            st.error(
-                "Please capture a face image."
+    with col1:
+
+        if ear_status:
+            st.success(
+                "EAR Blink: PASS"
             )
-            st.stop()
-
-        try:
-
-            file_bytes = np.asarray(
-                bytearray(image_file.getvalue()),
-                dtype=np.uint8
+        else:
+            st.warning(
+                "Blink Please"
             )
 
-            frame = cv2.imdecode(
-                file_bytes,
-                cv2.IMREAD_COLOR
+    with col2:
+
+        if fas_status:
+            st.success(
+                "Texture FAS: PASS"
             )
+        else:
+            st.warning(
+                "Texture FAS Checking"
+            )
+            if st.button(
+        "Mark Attendance"
+    ):
 
-            if not verify_liveness(frame):
+        with frame_lock:
 
-                log_attendance(
-                    "Unknown",
-                    "Spoofing_Detected"
+            if latest_frame is None:
+
+                st.error(
+                    "No frame received."
                 )
+
+                st.stop()
+
+            frame = latest_frame.copy()
+            try:
+
+            if not verify_dual_liveness(
+                frame
+            ):
+
+                try:
+
+                    log_attendance(
+                        "Unknown",
+                        "Spoofing_Detected"
+                    )
+
+                except:
+                    pass
 
                 st.error(
                     "Spoofing detected."
                 )
 
-                del frame
                 st.stop()
-
-            embedding = get_face_embedding(frame)
-
+            embedding = get_face_embedding(
+                frame
+            )
             try:
 
                 student_id = recognize_user(
@@ -215,40 +350,45 @@ elif menu == "Attendance":
 
             except TypeError:
 
-                # Compatible with old version
                 student_id = recognize_user(
                     embedding
                 )
-
-            del frame
-
-            if student_id and student_id != "Unknown":
+                if (
+                student_id
+                and
+                student_id != "Unknown"
+            ):
 
                 try:
+
                     log_attendance(
                         student_id,
                         "Success"
                     )
+
                 except:
                     pass
 
                 st.success(
                     f"Attendance marked for: {student_id}"
                 )
-
-            else:
+                else:
 
                 try:
+
                     log_attendance(
                         "Unknown",
                         "Recognition_Failed"
                     )
+
                 except:
                     pass
 
                 st.warning(
                     "User not recognized."
                 )
+            except Exception as e:
 
-        except Exception as e:
-            st.exception(e)
+            st.exception(
+                e
+            )
