@@ -16,7 +16,7 @@ face_detector = mp_face_detection.FaceDetection(model_selection=0, min_detection
 # 2. Initialize ONNX Runtime Inference Session
 # Note: You need to download a pre-trained MobileFaceNet ONNX model file from GitHub
 # and rename it to "mobilefacenet.onnx" in the same directory.
-MODEL_PATH = "mobilefacenet.onnx"
+MODEL_PATH = "models/mobilefacenet.onnx"
 try:
     ort_session = ort.InferenceSession(MODEL_PATH)
     # Get the input node name of the model
@@ -24,6 +24,7 @@ try:
 except Exception as e:
     warnings.warn(f"Failed to load ONNX model. Please ensure {MODEL_PATH} exists and the environment is correct. Error: {e}")
     ort_session = None
+
 
 
 # ---------------------------------------------------------
