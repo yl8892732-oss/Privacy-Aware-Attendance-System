@@ -1,3 +1,7 @@
+import sys, os
+# Automatically add the src folder to the Python search path
+sys.path.append(os.path.dirname(__file__))
+
 import streamlit as st
 import cv2
 import numpy as np
