@@ -197,7 +197,7 @@ class DynamicTextureDetector:
 
 class DualLivenessDetector:
     def __init__(self, buffer_size=10):
-        from wenli import TextureLivenessDetector
+        from texture import TextureLivenessDetector
 
         self.static_detector = TextureLivenessDetector(model_path=None, device='cpu')
         self.dynamic_detector = DynamicTextureDetector(buffer_size=buffer_size)
